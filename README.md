@@ -1,4 +1,3 @@
-```
 # 🧠 NeuralProtocol
 
 **Binary communication protocol for AI agents**  
