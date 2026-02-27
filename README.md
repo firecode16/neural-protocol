@@ -210,7 +210,7 @@ black neural_protocol/ tests/
 
 ## License
 
-MIT © 2025 Firecode16
+MIT © 2026 Firecode16
 
 ---
 
