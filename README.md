@@ -171,7 +171,7 @@ class MyAnalyticsAgent(WSNeuralAgent):
 
 ---
 
-## Using Neural‑Hub
+## Using NeuralHub
 
 For distributed agents across multiple machines or processes, you need the [neural‑hub](https://github.com/firecode16/neural-hub) server.  
 It acts as a central registry, router, and synaptic database.
