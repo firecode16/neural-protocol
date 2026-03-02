@@ -39,7 +39,7 @@ class NeuralSignalType(IntEnum):
 class NeuralSignal:
     signal_type: NeuralSignalType
     source: str
-    target: str
+    target: str                # Puede ser un hash local o un nombre global (ej. "ventas@empresa-b.com")
     payload: Dict[str, Any]
     msg_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     timestamp: float = field(default_factory=time.time)

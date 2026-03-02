@@ -19,6 +19,7 @@ from ..transport.websocket import (
     is_ctrl,
     create_dev_ssl_context,
 )
+from ..utils.constants import GLOBAL_ID_SEPARATOR   # nuevo
 
 
 class WSNeuralAgent:
@@ -45,17 +46,20 @@ class WSNeuralAgent:
         hub_host: str = "127.0.0.1",
         hub_port: int = 8765,
         use_ssl: Union[bool, ssl.SSLContext, None] = None,
+        domain: Optional[str] = None,           # nuevo: dominio del agente (para federación)
     ) -> None:
         """
         :param use_ssl: 
             - True: usa un contexto SSL para desarrollo (certificados no validados)
             - SSLContext: usa ese contexto específico
             - None o False: conexión sin SSL (ws://)
+        :param domain: dominio del hub al que pertenece el agente (ej. "empresa-a.com")
         """
-        self.identity = NeuralIdentity.generate(agent_id)
+        self.identity = NeuralIdentity.generate(agent_id, domain=domain)
         self.hub_host = hub_host
         self.hub_port = hub_port
         self.use_ssl = use_ssl
+        self.domain = domain   # guardar por si acaso
 
         self._conn: Optional[WebSocketConnection] = None
         self._peers: Dict[str, str] = {}       # agent_id → neural_hash (para resolución local, aún útil para algunos casos)
@@ -114,12 +118,15 @@ class WSNeuralAgent:
             ssl_param=self.use_ssl,
         )
 
-        # Enviar registro
-        await self._conn.send(ctrl_msg(
-            "register",
-            agent_id=self.identity.agent_id,
-            neural_hash=self.identity.neural_hash,
-        ))
+        # Enviar registro, incluyendo el dominio si está definido (para federación)
+        reg_msg = {
+            "agent_id": self.identity.agent_id,
+            "neural_hash": self.identity.neural_hash,
+        }
+        if self.domain:
+            reg_msg["domain"] = self.domain   # ← nuevo campo
+
+        await self._conn.send(ctrl_msg("register", **reg_msg))
 
         # Esperar confirmación
         data = await asyncio.wait_for(self._conn.recv(), timeout=10.0)
@@ -170,6 +177,7 @@ class WSNeuralAgent:
             pass
         elif t == "pong":
             pass  # heartbeat OK
+        # Aquí podrían añadirse manejadores para futuros mensajes de federación (ej. HUB_PEER_UPDATE)
 
     # ── Transmisión ───────────────────────────────────────────────────────
 
@@ -181,28 +189,26 @@ class WSNeuralAgent:
     ) -> bool:
         """
         Envía señal neural al agente destino a través del Hub.
-        El target_name es un nombre lógico (ej. "ventas") y el Hub hará round-robin.
+        El target_name puede ser un nombre local (ej. "ventas") o global (ej. "ventas@empresa-b.com").
+        El Hub se encargará de enrutar adecuadamente.
         """
         if not self._connected.is_set():
             self._info(f"⚠️  Sin conexión al Hub, esperando...")
             await asyncio.wait_for(self._connected.wait(), timeout=10.0)
 
-        # Ya no resolvemos el nombre localmente; el hub lo hará.
-        # Construimos la señal con target = target_name (nombre, no hash)
+        # Construimos la señal con target = target_name (el hub interpretará si es local o remoto)
         signal = NeuralSignal(
             signal_type=signal_type,
             source=self.identity.neural_hash,
-            target=target_name,  # ← ahora enviamos el nombre directamente
+            target=target_name,  # ← puede contener '@'
             payload=payload,
         )
 
-        self._info(f"📤 {signal} (a nombre '{target_name}')")
+        self._info(f"📤 {signal} (a '{target_name}')")
 
         try:
             await self._conn.send(signal.encode())
             self._memory.append(signal)
-            # No actualizamos sinapsis local porque el hub las gestiona centralizadamente
-            # Pero opcionalmente podemos trackear el intento localmente
             return True
 
         except Exception as e:

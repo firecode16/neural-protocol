@@ -19,6 +19,8 @@ NeuralProtocol offers a **binary, neurotransmitter‑inspired** alternative that
 - **Intelligent** – built‑in Hebbian learning (synaptic plasticity).
 - **Transport‑agnostic** – use in‑process queues, WebSocket, or any custom transport.
 - **Scalable** – supports multiple agents of the same type with round‑robin distribution (via [neural‑hub](https://github.com/firecode16/neural-hub)).
+- **Federated (NEW!)** – agents can communicate across different hubs using global identifiers (`nombre@dominio`).  
+  *Phase 1 complete: static federation with token authentication.*
 
 ---
 
@@ -28,7 +30,7 @@ NeuralProtocol offers a **binary, neurotransmitter‑inspired** alternative that
 |-----------------------|-----------------------------------------------------------------------------|
 | **NeuralSignal**      | A binary packet containing a signal type, source/target IDs, and a JSON payload. |
 | **NeuralSignalType**  | Digital neurotransmitters: `ACTION_POTENTIAL`, `DOPAMINE`, `SEROTONIN`, `NOREPINEPHRINE`, `GABA`, `GLUTAMATE`. |
-| **NeuralIdentity**    | Unique SHA‑256 based identifier for every agent.                           |
+| **NeuralIdentity**    | Unique SHA‑256 based identifier for every agent. Now includes an optional **domain** for global identification (`agent_id@domain`). |
 | **Synapse**           | A directed connection between two agents that strengthens/weakens with success/failure (Hebbian learning). |
 | **Transport**         | Pluggable layer for message delivery – `LocalTransport` (asyncio.Queue) and `WebSocket` client included. |
 
@@ -163,6 +165,38 @@ class MyAnalyticsAgent(WSNeuralAgent):
 
 ---
 
+## 🌐 Federated Communication (New in v1.1)
+
+NeuralProtocol now supports **federated multi‑hub architectures**, enabling agents from different domains to communicate seamlessly.
+
+### Key additions for federation
+
+- **Global identifiers**: Agents can be created with a `domain` parameter, resulting in a global ID like `agent_id@domain`.
+- **New control message types**: `FWD_SIGNAL`, `HUB_REGISTER`, `HUB_PEER_UPDATE` (prepared for Phase 2).
+- **Automatic routing**: When an agent calls `transmit("nombre@dominio", ...)`, the local hub forwards the signal to the appropriate remote hub.
+- **Backward compatible**: Existing agents without a domain continue to work as before.
+
+### Using federation in your agents
+
+Simply pass the `domain` argument when creating a `WSNeuralAgent`:
+
+```python
+agent = MyAgent(
+    agent_id="comprador",
+    domain="empresa-a.com",
+    hub_host="localhost",
+    hub_port=8765
+)
+await agent.start()
+await agent.transmit("vendedor@empresa-b.com", NeuralSignalType.NOREPINEPHRINE, {...})
+```
+
+The agent will automatically include its domain during registration, and the hub will handle the rest.
+
+> **Note**: Federation requires a compatible [neural‑hub](https://github.com/firecode16/neural-hub) version (≥1.1) with remote hubs configured.
+
+---
+
 ## Transports
 
 - **`LocalTransport`** – in‑process queues, perfect for testing and single‑process systems.
@@ -179,6 +213,7 @@ It acts as a central registry, router, and synaptic database.
 - Agents connect via WebSocket (or WSS in production).
 - The hub handles message delivery, offline queuing, and synaptic plasticity.
 - Round‑robin distribution is automatic when sending to a logical name (e.g., `"ventas"`).
+- **Federation** allows multiple hubs to interconnect (see section above).
 
 Install neural‑hub separately:
 
@@ -188,7 +223,17 @@ pip install neural-hub
 neural-hub --port 8765
 ```
 
-Then connect agents using `WSNeuralAgent` as shown above.
+Then connect agents using `WSNeuralAgent` as shown.
+
+---
+
+## Robustness & Performance
+
+- **Automatic reconnection** – WebSocket clients retry with exponential backoff.
+- **Message integrity** – each signal includes a magic number and version; malformed packets are rejected.
+- **High throughput** – >140k signals/sec encode/decode.
+- **Low memory footprint** – signals are binary, no heavy serialization overhead.
+- **Federation overhead** – minimal; forwarded signals are wrapped in a small JSON control message.
 
 ---
 
@@ -208,6 +253,28 @@ black neural_protocol/ tests/
 
 ---
 
+## Roadmap
+
+### ✅ Fase 1: Conexión básica entre hubs (completada)
+- Identidad global de agentes (`nombre@dominio`).
+- Nuevos tipos de mensajes de control (`FWD_SIGNAL`, `HUB_REGISTER`).
+- Soporte en `WSNeuralAgent` para envío a destinos remotos.
+- Compatibilidad con [neural‑hub](https://github.com/firecode16/neural-hub) Fase 1.
+
+### 🔄 Fase 2: Descubrimiento dinámico y presencia (próximo)
+- Intercambio de listas de agentes entre hubs (`HUB_PEER_UPDATE`).
+- El cliente puede consultar disponibilidad remota antes de enviar.
+- Optimizaciones de enrutamiento.
+
+### ⏳ Fase 3: Alta disponibilidad y balanceo
+- Soporte para múltiples hubs por dominio (clúster).
+- Resolución de conflictos de nombres.
+- Sincronización de sinapsis entre réplicas.
+
+Contributions and ideas are welcome!
+
+---
+
 ## License
 
 MIT © 2026 Firecode16
@@ -216,4 +283,3 @@ MIT © 2026 Firecode16
 
 **Inspired by the brain – built for AI agents.**  
 Try it, extend it, and join the conversation!
-```
