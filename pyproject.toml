@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neural-protocol"
+version = "1.0.0"
+description = "Binary communication protocol between AI agents"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+  { name = "Hernandez", email = "brain30316@gmail.com" }
+]
+
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/firecode16/neural-protocol"
+Repository = "https://github.com/firecode16/neural-protocol"
