@@ -19,8 +19,9 @@ NeuralProtocol offers a **binary, neurotransmitter‑inspired** alternative that
 - **Intelligent** – built‑in Hebbian learning (synaptic plasticity).
 - **Transport‑agnostic** – use in‑process queues, WebSocket, or any custom transport.
 - **Scalable** – supports multiple agents of the same type with round‑robin distribution (via [neural‑hub](https://github.com/firecode16/neural-hub)).
-- **Federated (NEW!)** – agents can communicate across different hubs using global identifiers (`nombre@dominio`).  
+- **Federated** – agents can communicate across different hubs using global identifiers (`nombre@dominio`).  
   *Phase 1 complete: static federation with token authentication.*
+- **JSON‑RPC 2.0 ready** – agents can act as JSON‑RPC clients to query hub status, discover agents, or transmit signals programmatically.
 
 ---
 
@@ -104,6 +105,65 @@ async def main():
 
 ---
 
+## 📡 JSON‑RPC 2.0 Client Capabilities
+
+`WSNeuralAgent` includes a built‑in JSON‑RPC 2.0 client that allows you to interact with the hub programmatically.
+
+### Methods
+
+#### `jsonrpc_call(method, params=None, timeout=10.0)`
+
+Sends a JSON‑RPC request and waits for the correlated response.
+
+```python
+# Get hub status
+status = await agent.jsonrpc_call("hub.status")
+print(f"Agents online: {status['agents_online']}")
+
+# Discover an agent by name
+info = await agent.jsonrpc_call("agent.discover", {"name": "ventas"})
+print(f"Agent hash: {info['neural_hash']}, online: {info['online']}")
+
+# Transmit a signal via JSON‑RPC
+result = await agent.jsonrpc_call(
+    "agent.transmit",
+    {
+        "target": "billing",
+        "signal_type": "ACTION_POTENTIAL",
+        "payload": {"invoice_id": 42}
+    }
+)
+print(f"Delivered, msg_id: {result['msg_id']}")
+```
+
+#### `jsonrpc_notify(method, params=None)`
+
+Sends a JSON‑RPC notification (no response expected). Ideal for events, telemetry, or fire‑and‑forget commands.
+
+```python
+# Send a ping notification (hub won't reply)
+await agent.jsonrpc_notify("agent.ping", {"source": "monitor"})
+```
+
+### Error Handling & Robustness
+
+- **Timeouts**: `jsonrpc_call` raises `asyncio.TimeoutError` if no response arrives within the timeout.
+- **Connection loss**: If the WebSocket disconnects, all pending RPC futures are automatically cancelled with a `ConnectionError`. This prevents hanging coroutines.
+- **Hub errors**: JSON‑RPC errors (e.g., method not found, invalid params) are raised as `RuntimeError` with the error code and message.
+
+```python
+try:
+    result = await agent.jsonrpc_call("unknown.method", timeout=5)
+except RuntimeError as e:
+    print(f"RPC failed: {e}")  # e.g., "JSON‑RPC error -32601: Method not found"
+except asyncio.TimeoutError:
+    print("Hub did not respond in time")
+except ConnectionError:
+    print("Agent is offline")
+```
+
+---
+
 ## Benchmark
 
 | Protocol        | Size (bytes) | vs NeuralProtocol |
@@ -165,9 +225,9 @@ class MyAnalyticsAgent(WSNeuralAgent):
 
 ---
 
-## 🌐 Federated Communication (New in v1.1)
+## 🌐 Federated Communication
 
-NeuralProtocol now supports **federated multi‑hub architectures**, enabling agents from different domains to communicate seamlessly.
+NeuralProtocol supports **federated multi‑hub architectures**, enabling agents from different domains to communicate seamlessly.
 
 ### Key additions for federation
 
@@ -214,6 +274,7 @@ It acts as a central registry, router, and synaptic database.
 - The hub handles message delivery, offline queuing, and synaptic plasticity.
 - Round‑robin distribution is automatic when sending to a logical name (e.g., `"ventas"`).
 - **Federation** allows multiple hubs to interconnect (see section above).
+- **JSON‑RPC 2.0 API** – the hub exposes a rich JSON‑RPC interface for monitoring and control (see [neural‑hub README](https://github.com/firecode16/neural-hub) for details).
 
 Install neural‑hub separately:
 
@@ -234,6 +295,7 @@ Then connect agents using `WSNeuralAgent` as shown.
 - **High throughput** – >140k signals/sec encode/decode.
 - **Low memory footprint** – signals are binary, no heavy serialization overhead.
 - **Federation overhead** – minimal; forwarded signals are wrapped in a small JSON control message.
+- **JSON‑RPC resilience** – pending RPC futures are automatically cancelled on disconnection, preventing resource leaks.
 
 ---
 
