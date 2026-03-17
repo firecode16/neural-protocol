@@ -19,9 +19,9 @@ NeuralProtocol offers a **binary, neurotransmitter‑inspired** alternative that
 - **Intelligent** – built‑in Hebbian learning (synaptic plasticity).
 - **Transport‑agnostic** – use in‑process queues, WebSocket, or any custom transport.
 - **Scalable** – supports multiple agents of the same type with round‑robin distribution (via [neural‑hub](https://github.com/firecode16/neural-hub)).
-- **Federated** – agents can communicate across different hubs using global identifiers (`nombre@dominio`).  
-  *Phase 1 complete: static federation with token authentication.*
-- **JSON‑RPC 2.0 ready** – agents can act as JSON‑RPC clients to query hub status, discover agents, or transmit signals programmatically.
+- **Federated (Fase 2)** – agents can communicate across different hubs using global identifiers (`nombre@dominio`).  
+  *Now with dynamic discovery and presence tracking between hubs.*
+- **JSON‑RPC 2.0 ready** – agents can act as JSON‑RPC clients to query hub status, discover agents, check remote availability, or transmit signals programmatically.
 
 ---
 
@@ -134,6 +134,11 @@ result = await agent.jsonrpc_call(
     }
 )
 print(f"Delivered, msg_id: {result['msg_id']}")
+
+# NEW: Check remote agent availability (requires federation Fase 2)
+remote = await agent.jsonrpc_call("remote_agent.discover", {"name": "vendedor@empresa-b.com"})
+if remote["online"]:
+    print("Remote agent is online")
 ```
 
 #### `jsonrpc_notify(method, params=None)`
@@ -225,15 +230,17 @@ class MyAnalyticsAgent(WSNeuralAgent):
 
 ---
 
-## 🌐 Federated Communication
+## 🌐 Federated Communication (Fase 2)
 
-NeuralProtocol supports **federated multi‑hub architectures**, enabling agents from different domains to communicate seamlessly.
+NeuralProtocol supports **federated multi‑hub architectures**, enabling agents from different domains to communicate seamlessly.  
+With **Fase 2**, hubs now exchange real‑time information about available agents, allowing optimized routing and presence checks.
 
 ### Key additions for federation
 
 - **Global identifiers**: Agents can be created with a `domain` parameter, resulting in a global ID like `agent_id@domain`.
-- **New control message types**: `FWD_SIGNAL`, `HUB_REGISTER`, `HUB_PEER_UPDATE` (prepared for Phase 2).
-- **Automatic routing**: When an agent calls `transmit("nombre@dominio", ...)`, the local hub forwards the signal to the appropriate remote hub.
+- **Control message types**: `FWD_SIGNAL`, `HUB_REGISTER`, `HUB_PEER_UPDATE` (dynamic peer updates).
+- **Automatic routing**: When an agent calls `transmit("nombre@dominio", ...)`, the local hub forwards the signal to the appropriate remote hub, but **only if the remote agent is known and online** (thanks to dynamic discovery).
+- **Presence queries**: Agents can now check if a remote agent is available before sending, using JSON‑RPC (`remote_agent.discover`).
 - **Backward compatible**: Existing agents without a domain continue to work as before.
 
 ### Using federation in your agents
@@ -248,12 +255,18 @@ agent = MyAgent(
     hub_port=8765
 )
 await agent.start()
-await agent.transmit("vendedor@empresa-b.com", NeuralSignalType.NOREPINEPHRINE, {...})
+
+# Check if remote agent is online before sending (NEW)
+info = await agent.jsonrpc_call("remote_agent.discover", {"name": "vendedor@empresa-b.com"})
+if info["online"]:
+    await agent.transmit("vendedor@empresa-b.com", NeuralSignalType.NOREPINEPHRINE, {...})
+else:
+    print("Remote agent is offline, try later")
 ```
 
-The agent will automatically include its domain during registration, and the hub will handle the rest.
+The agent will automatically include its domain during registration, and the hub will handle the rest (including dynamic peer updates).
 
-> **Note**: Federation requires a compatible [neural‑hub](https://github.com/firecode16/neural-hub) version (≥1.1) with remote hubs configured.
+> **Note**: Federation requires a compatible [neural‑hub](https://github.com/firecode16/neural-hub) version (≥1.2) with remote hubs configured and Fase 2 features enabled.
 
 ---
 
@@ -273,7 +286,7 @@ It acts as a central registry, router, and synaptic database.
 - Agents connect via WebSocket (or WSS in production).
 - The hub handles message delivery, offline queuing, and synaptic plasticity.
 - Round‑robin distribution is automatic when sending to a logical name (e.g., `"ventas"`).
-- **Federation** allows multiple hubs to interconnect (see section above).
+- **Federation (Fase 2)** allows multiple hubs to interconnect with dynamic discovery and presence tracking.
 - **JSON‑RPC 2.0 API** – the hub exposes a rich JSON‑RPC interface for monitoring and control (see [neural‑hub README](https://github.com/firecode16/neural-hub) for details).
 
 Install neural‑hub separately:
@@ -294,7 +307,7 @@ Then connect agents using `WSNeuralAgent` as shown.
 - **Message integrity** – each signal includes a magic number and version; malformed packets are rejected.
 - **High throughput** – >140k signals/sec encode/decode.
 - **Low memory footprint** – signals are binary, no heavy serialization overhead.
-- **Federation overhead** – minimal; forwarded signals are wrapped in a small JSON control message.
+- **Federation overhead** – minimal; forwarded signals are wrapped in a small JSON control message, and peer updates are periodic (every 30s) or event‑driven.
 - **JSON‑RPC resilience** – pending RPC futures are automatically cancelled on disconnection, preventing resource leaks.
 
 ---
@@ -323,12 +336,12 @@ black neural_protocol/ tests/
 - Soporte en `WSNeuralAgent` para envío a destinos remotos.
 - Compatibilidad con [neural‑hub](https://github.com/firecode16/neural-hub) Fase 1.
 
-### 🔄 Fase 2: Descubrimiento dinámico y presencia (próximo)
+### ✅ Fase 2: Descubrimiento dinámico y presencia (completada)
 - Intercambio de listas de agentes entre hubs (`HUB_PEER_UPDATE`).
-- El cliente puede consultar disponibilidad remota antes de enviar.
-- Optimizaciones de enrutamiento.
+- El cliente puede consultar disponibilidad remota antes de enviar (vía JSON‑RPC).
+- Optimizaciones de enrutamiento (el hub solo reenvía si el destino existe y está online).
 
-### ⏳ Fase 3: Alta disponibilidad y balanceo
+### ⏳ Fase 3: Alta disponibilidad y balanceo (próximo)
 - Soporte para múltiples hubs por dominio (clúster).
 - Resolución de conflictos de nombres.
 - Sincronización de sinapsis entre réplicas.
