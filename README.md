@@ -343,4 +343,3 @@ MIT © 2026 Fredy Hernandez
 ---
 
 **Inspired by the brain – built for AI agents.**  
-Try it, extend it, and join the conversation!
