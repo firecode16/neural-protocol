@@ -61,7 +61,6 @@ pip install -e .
 import asyncio
 from neural_protocol import LocalTransport, NeuralAgent
 from neural_protocol.core.signal import NeuralSignal, NeuralSignalType
-from neural_protocol.core.identity import NeuralIdentity
 
 class EchoAgent(NeuralAgent):
     async def handle_signal(self, signal):
@@ -72,7 +71,7 @@ async def main():
     agent = EchoAgent("echo", transport)
     await agent.start()
 
-    # Send a signal to yourself (broadcast would use target="")
+    # Send a signal to yourself
     await agent.transport.send(NeuralSignal(
         signal_type=NeuralSignalType.DOPAMINE,
         source=agent.identity.neural_hash,
@@ -101,6 +100,8 @@ async def main():
     await agent.transmit("coordinator", NeuralSignalType.NOREPINEPHRINE, {"task": "process"})
     await asyncio.sleep(5)
     await agent.stop()
+
+asyncio.run(main())
 ```
 
 ---
@@ -124,7 +125,7 @@ print(f"Agents online: {status['agents_online']}")
 info = await agent.jsonrpc_call("agent.discover", {"name": "ventas"})
 print(f"Agent hash: {info['neural_hash']}, online: {info['online']}")
 
-# Transmit a signal via JSON‑RPC
+# Transmit a signal via JSON‑RPC (target is a logical agent name)
 result = await agent.jsonrpc_call(
     "agent.transmit",
     {
@@ -135,7 +136,7 @@ result = await agent.jsonrpc_call(
 )
 print(f"Delivered, msg_id: {result['msg_id']}")
 
-# NEW: Check remote agent availability (requires federation Fase 2)
+# Check remote agent availability (requires federation)
 remote = await agent.jsonrpc_call("remote_agent.discover", {"name": "vendedor@empresa-b.com"})
 if remote["online"]:
     print("Remote agent is online")
@@ -153,14 +154,14 @@ await agent.jsonrpc_notify("agent.ping", {"source": "monitor"})
 ### Error Handling & Robustness
 
 - **Timeouts**: `jsonrpc_call` raises `asyncio.TimeoutError` if no response arrives within the timeout.
-- **Connection loss**: If the WebSocket disconnects, all pending RPC futures are automatically cancelled with a `ConnectionError`. This prevents hanging coroutines.
+- **Connection loss**: If the WebSocket disconnects, all pending RPC futures are automatically cancelled with a `ConnectionError`.
 - **Hub errors**: JSON‑RPC errors (e.g., method not found, invalid params) are raised as `RuntimeError` with the error code and message.
 
 ```python
 try:
     result = await agent.jsonrpc_call("unknown.method", timeout=5)
 except RuntimeError as e:
-    print(f"RPC failed: {e}")  # e.g., "JSON‑RPC error -32601: Method not found"
+    print(f"RPC failed: {e}")
 except asyncio.TimeoutError:
     print("Hub did not respond in time")
 except ConnectionError:
@@ -185,27 +186,6 @@ Run the benchmark yourself:
 
 ```bash
 python -m neural_protocol.demo.benchmark
-```
-
----
-
-## Built‑in Agents (Demo)
-
-The library includes three example agents that showcase a realistic customer‑support flow:
-
-- `SupportAgent` – receives tickets, detects upsell opportunities.
-- `SalesAgent` – creates deals, applies discounts.
-- `BillingAgent` – processes payments, broadcasts dopamine.
-
-They can run locally (with `LocalTransport`) or connect to a neural‑hub via WebSocket (using `WSSupportAgent` etc.).  
-Try the demo:
-
-```bash
-# Local in‑process demo
-python -m neural_protocol.demo.run_demo
-
-# WebSocket demo (requires a running neural‑hub)
-python -m neural_protocol.demo.run_hub_demo
 ```
 
 ---
@@ -239,7 +219,7 @@ With **Fase 2**, hubs now exchange real‑time information about available agent
 
 - **Global identifiers**: Agents can be created with a `domain` parameter, resulting in a global ID like `agent_id@domain`.
 - **Control message types**: `FWD_SIGNAL`, `HUB_REGISTER`, `HUB_PEER_UPDATE` (dynamic peer updates).
-- **Automatic routing**: When an agent calls `transmit("nombre@dominio", ...)`, the local hub forwards the signal to the appropriate remote hub, but **only if the remote agent is known and online** (thanks to dynamic discovery).
+- **Automatic routing**: When an agent calls `transmit("nombre@dominio", ...)`, the local hub forwards the signal to the appropriate remote hub, but **only if the remote agent is known and online**.
 - **Presence queries**: Agents can now check if a remote agent is available before sending, using JSON‑RPC (`remote_agent.discover`).
 - **Backward compatible**: Existing agents without a domain continue to work as before.
 
@@ -256,7 +236,7 @@ agent = MyAgent(
 )
 await agent.start()
 
-# Check if remote agent is online before sending (NEW)
+# Check if remote agent is online before sending
 info = await agent.jsonrpc_call("remote_agent.discover", {"name": "vendedor@empresa-b.com"})
 if info["online"]:
     await agent.transmit("vendedor@empresa-b.com", NeuralSignalType.NOREPINEPHRINE, {...})
@@ -264,9 +244,15 @@ else:
     print("Remote agent is offline, try later")
 ```
 
-The agent will automatically include its domain during registration, and the hub will handle the rest (including dynamic peer updates).
+The agent will automatically include its domain during registration, and the hub will handle the rest.
 
-> **Note**: Federation requires a compatible [neural‑hub](https://github.com/firecode16/neural-hub) version (≥1.2) with remote hubs configured and Fase 2 features enabled.
+> **Note**: Federation requires a compatible [neural‑hub](https://github.com/firecode16/neural-hub) version (≥1.2) with remote hubs configured.
+
+---
+
+## 📚 Example Projects
+
+For a complete, real-world example of federated agents in a B2B scenario (purchase-sales-invoicing), check out the **[federacion-demo](https://github.com/firecode16/federacion-demo)** repository. It demonstrates two companies (`empresa-a.com` and `empresa-b.com`) with agents `comprador`, `vendedor`, and `facturacion` communicating across hubs.
 
 ---
 
@@ -287,7 +273,7 @@ It acts as a central registry, router, and synaptic database.
 - The hub handles message delivery, offline queuing, and synaptic plasticity.
 - Round‑robin distribution is automatic when sending to a logical name (e.g., `"ventas"`).
 - **Federation (Fase 2)** allows multiple hubs to interconnect with dynamic discovery and presence tracking.
-- **JSON‑RPC 2.0 API** – the hub exposes a rich JSON‑RPC interface for monitoring and control (see [neural‑hub README](https://github.com/firecode16/neural-hub) for details).
+- **JSON‑RPC 2.0 API** – the hub exposes a rich JSON‑RPC interface for monitoring and control.
 
 Install neural‑hub separately:
 
@@ -307,7 +293,7 @@ Then connect agents using `WSNeuralAgent` as shown.
 - **Message integrity** – each signal includes a magic number and version; malformed packets are rejected.
 - **High throughput** – >140k signals/sec encode/decode.
 - **Low memory footprint** – signals are binary, no heavy serialization overhead.
-- **Federation overhead** – minimal; forwarded signals are wrapped in a small JSON control message, and peer updates are periodic (every 30s) or event‑driven.
+- **Federation overhead** – minimal; forwarded signals are wrapped in a small JSON control message, and peer updates are periodic.
 - **JSON‑RPC resilience** – pending RPC futures are automatically cancelled on disconnection, preventing resource leaks.
 
 ---
